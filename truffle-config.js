@@ -9,7 +9,13 @@ module.exports = {
       },
       network_id: '*',
       gas: 9999999
-    }
+    },
+    develop: {
+      port: 8545,
+      provider: function() {
+        return new HDWalletProvider(mnemonic, "http://127.0.0.1:8545/", 0, 50);
+      },
+    },
   },
   compilers: {
     solc: {
