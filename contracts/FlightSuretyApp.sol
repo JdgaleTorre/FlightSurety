@@ -1,22 +1,27 @@
+// SPDX-License-Identifier: MIT
 pragma solidity >0.4.25;
 
 // It's important to avoid vulnerabilities due to numeric overflow bugs
 // OpenZeppelin's SafeMath library, when used correctly, protects agains such bugs
-// More info: https://www.nccgroup.trust/us/about-us/newsroom-and-events/blog/2018/november/smart-contract-insecurity-bad-arithmetic/
 
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+
+import "./FlightSuretyData.sol";
 
 /************************************************** */
 /* FlightSurety Smart Contract                      */
 /************************************************** */
-contract FlightSuretyApp {
-    using SafeMath for uint256; // Allow SafeMath functions to be called for all uint256 types (similar to "prototype" in Javascript)
 
+contract FlightSuretyApp {
+    using SafeMath for uint256; // Allow SafeMath functions to be called for all uint256 types(similar to "prototype" in Javascript)
+
+    FlightSuretyData flightSuretyData; // Instance of FlightSuretyData
     /********************************************************************************************/
     /*                                       DATA VARIABLES                                     */
     /********************************************************************************************/
-
-    // Flight status codees
+    // Number of votes for set operational an airline
+    uint8 private constant NUMBER_AIRLINES_BEFORE_VOTES = 4;
+    // Flight status codeesregisterAirline
     uint8 private constant STATUS_CODE_UNKNOWN = 0;
     uint8 private constant STATUS_CODE_ON_TIME = 10;
     uint8 private constant STATUS_CODE_LATE_AIRLINE = 20;
@@ -25,14 +30,6 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     address private contractOwner; // Account used to deploy contract
-
-    struct Flight {
-        bool isRegistered;
-        uint8 statusCode;
-        uint256 updatedTimestamp;
-        address airline;
-    }
-    mapping(bytes32 => Flight) private flights;
 
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -48,7 +45,10 @@ contract FlightSuretyApp {
      */
     modifier requireIsOperational() {
         // Modify to call data contract's status
-        require(true, "Contract is currently not operational");
+        require(
+            flightSuretyData.isOperational(),
+            "Contract is currently not operational"
+        );
         _; // All modifiers require an "_" which indicates where the function body will be added
     }
 
@@ -64,20 +64,18 @@ contract FlightSuretyApp {
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
 
-    /**
-     * @dev Contract constructor
-     *
-     */
-    constructor() public {
+    constructor(address dataContract) {
         contractOwner = msg.sender;
+        flightSuretyData = FlightSuretyData(dataContract);
+        flightSuretyData.registerAirline(msg.sender, true);
     }
 
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
 
-    function isOperational() public pure returns (bool) {
-        return true; // Modify to call data contract's status
+    function isOperational() public view returns (bool) {
+        return flightSuretyData.isOperational(); // Modify to call data contract's status
     }
 
     /********************************************************************************************/
@@ -88,12 +86,50 @@ contract FlightSuretyApp {
      * @dev Add an airline to the registration queue
      *
      */
-    function registerAirline()
+    function registerAirline(address airline)
         external
-        pure
+        requireIsOperational
         returns (bool success, uint256 votes)
     {
-        return (success, 0);
+        require(
+            flightSuretyData.getAirlineOperational(msg.sender) == true,
+            "Caller airline is not operational"
+        );
+        require(airline != address(0), "Airline must be a valid address.");
+        require(
+            flightSuretyData.getAirlineRegistered(airline) == false,
+            "Airline is already registered"
+        );
+
+        if (
+            flightSuretyData.getAirlinesLength() < NUMBER_AIRLINES_BEFORE_VOTES
+        ) {
+            flightSuretyData.registerAirline(airline, false);
+            return (true, 0);
+        } else {
+            uint256 countVotes = flightSuretyData.getAirlineVotes(airline);
+            uint256 airlines = flightSuretyData.getAirlinesLength();
+            if (countVotes + 1 < airlines / 2) {
+                flightSuretyData.setVoteAirline(airline);
+                return (false, countVotes + 1);
+            } else {
+                flightSuretyData.registerAirline(airline, false);
+                return (true, 0);
+            }
+        }
+    }
+
+    /**
+     * @dev Add founds to an Airline
+     *
+     */
+    function addFunds() external payable {
+        require(
+            flightSuretyData.getAirlineRegistered(msg.sender) == true,
+            "Airline is already registered"
+        );
+
+        flightSuretyData.fund(msg.sender, msg.value);
     }
 
     /**
@@ -213,6 +249,7 @@ contract FlightSuretyApp {
     // For the response to be accepted, there must be a pending request that is open
     // and matches one of the three Indexes randomly assigned to the oracle at the
     // time of registration (i.e. uninvited oracles are not welcome)
+
     function submitOracleResponse(
         uint8 index,
         address airline,
