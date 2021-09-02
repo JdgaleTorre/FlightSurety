@@ -22,21 +22,37 @@ contract FlightSuretyData {
         address airline;
     }
 
+    struct Passenger {
+        address wallet;
+        mapping(string => uint256) boughtFlight;
+        uint256 insuranceCredit;
+    }
 
     address private contractOwner; // Account used to deploy contract
     bool private operational = true; // Blocks all state changes throughout the contract if false
     uint256 private airLinesCount = 0; // counter of airlines
     address private authorizeCallerAddress; // set the account authorized to call this contract
-    
-    mapping(bytes32 => Flight) private flights;  // set the list of flights
+
+    mapping(bytes32 => Flight) private flights; // set the list of flights
     mapping(address => airlineStruct) airlines; //set the list of airlines
     mapping(address => address[]) votesRegistration; // set the list of votes for the address
+    mapping(address => Passenger) private passengers; // set list of passengers
+
+    // Flight status codeesregisterAirline
+    uint8 private constant STATUS_CODE_UNKNOWN = 0;
+    uint8 private constant STATUS_CODE_ON_TIME = 10;
+    uint8 private constant STATUS_CODE_LATE_AIRLINE = 20;
+    uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
+    uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
+    uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
     event RegisterAirline(address account);
     event FoundingAirline(address account, uint256 value);
+    event FlightRegistered(bytes32 flightKey, address airline);
+    event FlightInsuranceBought(address account, bytes32 flightKey);
 
     /**
      * @dev Constructor
@@ -105,15 +121,27 @@ contract FlightSuretyData {
         votesRegistration[airline].push(msg.sender);
     }
 
-    function getAirlineRegistered(address airline) requireCallerAuthorized view returns (bool) {
+    function getAirlineRegistered(address airline)
+        view
+        requireCallerAuthorized
+        returns (bool)
+    {
         return (airlines[airline].isRegistered);
     }
 
-    function getAirlineOperational(address airline) requireCallerAuthorized view returns (bool) {
+    function getAirlineOperational(address airline)
+        view
+        requireCallerAuthorized
+        returns (bool)
+    {
         return (airlines[airline].isOperational);
     }
 
-    function getAirlineFunds(address airline) requireCallerAuthorized view returns (uint256) {
+    function getAirlineFunds(address airline)
+        view
+        requireCallerAuthorized
+        returns (uint256)
+    {
         return (airlines[airline].funds);
     }
 
@@ -121,7 +149,11 @@ contract FlightSuretyData {
         authorizeCallerAddress = caller;
     }
 
-    function getAirlineVotes(address airline) requireCallerAuthorized view returns (uint256) {
+    function getAirlineVotes(address airline)
+        view
+        requireCallerAuthorized
+        returns (uint256)
+    {
         return votesRegistration[airline].length;
     }
 
@@ -151,7 +183,19 @@ contract FlightSuretyData {
      * @dev Buy insurance for a flight
      *
      */
-    function buy() external payable {}
+    function buy(address passenger, string flightCode, uint256 value)
+        external
+        payable
+        requireCallerAuthorized
+    {
+        passengers[passenger] = Passenger({
+            passengerWallet: passenger,
+            credit: 0
+        });
+        passengers[passenger].boughtFlight[flightCode] = value;
+
+        emit FlightBought(passenger, flightCode);
+    }
 
     /**
      *  @dev Credits payouts to insurees
@@ -171,15 +215,13 @@ contract FlightSuretyData {
      */
     function fund(address airline, uint256 amount) public {
         airlines[airline].funds = airlines[airline].funds + amount;
-        if(airlines[airline].funds >= 10 ether) {
+        if (airlines[airline].funds >= 10 ether) {
             airlines[airline].isOperational = true;
         }
         emit FoundingAirline(airline, amount);
     }
 
-    function createFlight(string memory flight) public {
-        
-    }
+    function createFlight(string memory flight) public {}
 
     function getFlightKey(
         address airline,
@@ -193,6 +235,36 @@ contract FlightSuretyData {
         return airLinesCount;
     }
 
+    /**
+     * @dev Register a future flight for insuring.
+     *
+     */
+    function registerFlight(
+        string destination,
+        string flight,
+        address airline
+    ) external {
+        bytes32 key = getFlightKey(airline, flight, now);
+        require(!flights[key].isRegistered, "Flight is already registered.");
+        require(
+            getAirlineOperational(airline) == true,
+            "Airline isn't operational."
+        );
+
+        flights[key] = Flight({
+            isRegistered: true,
+            flightCode: flight,
+            destination: destination,
+            statusCode: STATUS_CODE_UNKNOWN,
+            updatedTimestamp: timestamp,
+            airline: airline
+        });
+        emit FlightRegistered(key, airline);
+    }
+
+    function getFlights() external {
+        return flights;
+    }
     /**
      * @dev Fallback function for funding smart contract.
      *

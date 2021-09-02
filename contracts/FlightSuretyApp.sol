@@ -21,13 +21,6 @@ contract FlightSuretyApp {
     /********************************************************************************************/
     // Number of votes for set operational an airline
     uint8 private constant NUMBER_AIRLINES_BEFORE_VOTES = 4;
-    // Flight status codeesregisterAirline
-    uint8 private constant STATUS_CODE_UNKNOWN = 0;
-    uint8 private constant STATUS_CODE_ON_TIME = 10;
-    uint8 private constant STATUS_CODE_LATE_AIRLINE = 20;
-    uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
-    uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
-    uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     address private contractOwner; // Account used to deploy contract
 
@@ -132,11 +125,22 @@ contract FlightSuretyApp {
         flightSuretyData.fund(msg.sender, msg.value);
     }
 
-    /**
-     * @dev Register a future flight for insuring.
-     *
-     */
-    function registerFlight() external pure {}
+    function registerFlight(string flight, string destination) requireIsOperational {
+        flightSuretyData.registerFlight(destination, flight, msg.sender);
+    }
+
+    function getFlights() requireIsOperational{
+        return flightSuretyData.getFlights();
+    }
+
+    function buy(string flightCode) external payable requireIsOperational {
+        require(
+            msg.value >= 1 ether,
+            "The payment for the insurance has to be more than 1 ether"
+        );
+
+        flightSuretyData.buy(msg.sender, flightCode, msg.value);
+    }
 
     /**
      * @dev Called after oracle has updated flight status
