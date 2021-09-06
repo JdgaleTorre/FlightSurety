@@ -12,6 +12,7 @@ module.exports = {
     },
     develop: {
       port: 8545,
+      accounts: 40,
       provider: function() {
         return new HDWalletProvider(mnemonic, "http://127.0.0.1:8545/", 0, 50);
       },
@@ -19,7 +20,7 @@ module.exports = {
   },
   compilers: {
     solc: {
-      version: "^0.4.24"
+      version: ">=0.6.0 <0.8.8"
     }
   }
 };

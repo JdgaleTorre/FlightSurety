@@ -3,6 +3,17 @@ var BigNumber = require("bignumber.js");
 
 contract("Flight Surety Tests", async (accounts) => {
   var config;
+  const TIMESTAMP = Math.floor(Date.now() / 1000);
+
+  let FLIGHT = {
+    airline: accounts[2],
+    flight: "ND1309", 
+    from: "SPS",
+    to: "TGU", 
+    timestamp: TIMESTAMP
+  }
+
+
   before("setup contract", async () => {
     config = await Test.Config(accounts);
     await config.flightSuretyData.authorizeCaller(
@@ -77,27 +88,33 @@ contract("Flight Surety Tests", async (accounts) => {
       console.log(e);
     }
     let registered = await config.flightSuretyData.getAirlineRegistered.call(
-      newAirline, {from: config.flightSuretyApp.address}
+      newAirline,
+      { from: config.flightSuretyApp.address }
     );
 
     let operational = await config.flightSuretyData.getAirlineOperational.call(
-      newAirline, {from: config.flightSuretyApp.address}
+      newAirline,
+      { from: config.flightSuretyApp.address }
     );
 
     // ASSERT
     assert.equal(registered, true, "Airline is registered");
-    assert.equal(operational, false, "Airline should not be operational if doesnt have founds");
+    assert.equal(
+      operational,
+      false,
+      "Airline should not be operational if doesnt have founds"
+    );
   });
 
-  it("(airline) add Founds to Airline", async () => {
-
+  it("(airline) add Funds to Airline", async () => {
     try {
-      await config.flightSuretyApp.addFunds({from: accounts[0], value: 1});
+      await config.flightSuretyApp.addFunds({ from: accounts[0], value: 1 });
     } catch (e) {
       console.log(e);
     }
     let funds = await config.flightSuretyData.getAirlineFunds.call(
-      accounts[0], {from: config.flightSuretyApp.address}
+      accounts[0],
+      { from: config.flightSuretyApp.address }
     );
 
     // ASSERT
@@ -105,17 +122,110 @@ contract("Flight Surety Tests", async (accounts) => {
   });
 
   it("(airline) Set as operational an Airline when them have more than 10 ether in founds", async () => {
-
     try {
-      await config.flightSuretyApp.addFunds({from: accounts[0], value: 9});
+      await config.flightSuretyApp.addFunds({ from: accounts[0], value: 9 });
     } catch (e) {
       console.log(e);
     }
     let operational = await config.flightSuretyData.getAirlineOperational.call(
-      accounts[0], {from: config.flightSuretyApp.address}
+      accounts[0],
+      { from: config.flightSuretyApp.address }
     );
 
     // ASSERT
     assert.equal(operational, true, "Airline should be operational");
+  });
+
+  it("(airline) When there is more than 4 Airline put new airline on vote", async () => {
+    let newAirline3 = accounts[2];
+    let newAirline4 = accounts[3];
+    let newAirline5 = accounts[4];
+
+    // ACT
+    try {
+      await config.flightSuretyApp.registerAirline(newAirline3, {
+        from: config.firstAirline,
+      });
+
+      await config.flightSuretyApp.addFunds({
+        from: newAirline3,
+        value: web3.utils.toWei("10"),
+      });
+
+      let operationalAirline3 =
+        await config.flightSuretyData.getAirlineOperational.call(newAirline3, {
+          from: config.flightSuretyApp.address,
+        });
+
+      let fundsAirline3 = await config.flightSuretyData.getAirlineFunds.call(
+        newAirline3,
+        { from: config.flightSuretyApp.address }
+      );
+
+      assert.equal(operationalAirline3, true, "Airline should be operational");
+      assert.equal(fundsAirline3, web3.utils.toWei("10"), "Error in funds");
+
+      await config.flightSuretyApp.registerAirline(newAirline4, {
+        from: config.firstAirline,
+      });
+
+      await config.flightSuretyApp.addFunds({
+        from: newAirline4,
+        value: web3.utils.toWei("10"),
+      });
+
+      let operationalAirline4 =
+        await config.flightSuretyData.getAirlineOperational.call(newAirline4, {
+          from: config.flightSuretyApp.address,
+        });
+
+      assert.equal(operationalAirline4, true, "Airline should be operational");
+
+      await config.flightSuretyApp.registerAirline(newAirline5, {
+        from: config.firstAirline,
+      });
+    } catch (e) {
+      console.log(e);
+    }
+    let length = await config.flightSuretyData.getAirlinesLength({
+      from: config.firstAirline,
+    });
+    // Assert
+    assert.equal(length, 4, "There is an error on airline length");
+
+    // Vote for New Airline5
+    await config.flightSuretyApp.registerAirline(newAirline5, {
+      from: newAirline3,
+    });
+    let newlength = await config.flightSuretyData.getAirlinesLength({
+      from: config.firstAirline,
+    });
+
+    // Assert
+    assert.equal(newlength, 5, "There is an error on airline length");
+  });
+
+  it("(airline) Airline 2 can add a Flight", async () => {
+    
+    try {
+      await config.flightSuretyApp.registerFlight(
+        FLIGHT.flight,
+        FLIGHT.from,
+        FLIGHT.to,
+        FLIGHT.timestamp,
+        { from: FLIGHT.airline }
+      );
+    } catch (e) {
+      console.log(e);
+    }
+    let isValidFlight = await config.flightSuretyData.isValidFlight.call(
+      FLIGHT.flight,
+      FLIGHT.airline,
+      FLIGHT.timestamp,
+      { from: config.flightSuretyApp.address }
+    );
+
+    // ASSERT
+    assert.equal(isValidFlight, true, "Flight isn't valid");
   });
 });
