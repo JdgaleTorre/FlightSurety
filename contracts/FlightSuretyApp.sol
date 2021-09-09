@@ -21,7 +21,7 @@ contract FlightSuretyApp {
     /********************************************************************************************/
     // Number of votes for set operational an airline
     uint8 private constant NUMBER_AIRLINES_BEFORE_VOTES = 4;
-    uint constant INSURANCE_MULTIPLIER = 150;
+    uint256 constant INSURANCE_MULTIPLIER = 150;
 
     address private contractOwner; // Account used to deploy contract
 
@@ -112,6 +112,7 @@ contract FlightSuretyApp {
             }
         }
     }
+
     /**
      * @dev Add founds to an Airline
      *
@@ -145,27 +146,32 @@ contract FlightSuretyApp {
         );
     }
 
-    function buy(string memory flightCode, address airline, uint256 timestamp)
-        external
-        payable
-        requireIsOperational
-    {
+    function buy(
+        string memory flightCode,
+        address airline,
+        uint256 timestamp
+    ) external payable requireIsOperational {
         require(
             msg.value >= 1 ether,
             "The payment for the insurance has to be more than 1 ether"
         );
 
-        flightSuretyData.buy(msg.sender, flightCode, msg.value, airline, timestamp);
+        flightSuretyData.buy(
+            msg.sender,
+            flightCode,
+            msg.value,
+            airline,
+            timestamp
+        );
 
         payable(flightSuretyData).transfer(msg.value);
     }
 
-    function isValidFlight(string memory flightCode, address airline, uint256 timestamp)
-        external
-        view
-        requireIsOperational
-        returns(bool)
-    {
+    function isValidFlight(
+        string memory flightCode,
+        address airline,
+        uint256 timestamp
+    ) external view requireIsOperational returns (bool) {
         return flightSuretyData.isValidFlight(flightCode, airline, timestamp);
     }
 
@@ -178,7 +184,18 @@ contract FlightSuretyApp {
         string memory flight,
         uint256 timestamp,
         uint8 statusCode
-    ) internal pure {}
+    ) public requireIsOperational {
+        flightSuretyData.processFlightStatus(
+            airline,
+            flight,
+            timestamp,
+            statusCode
+        );
+    }
+
+    function withdraw() public requireIsOperational {
+        flightSuretyData.pay(msg.sender);
+    }
 
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus(

@@ -243,7 +243,8 @@ contract FlightSuretyData {
                     .amount
                     .mul(flightData.multiplier)
                     .div(100);
-                passenger.insuranceCredit += amount;
+                passengers[flightData.passengersList[i]]
+                    .insuranceCredit += amount;
 
                 emit InsureeCredited(passenger.wallet, amount);
             }
@@ -336,10 +337,54 @@ contract FlightSuretyData {
         string memory flightCode,
         address airline,
         uint256 timestamp
-    ) external view requireCallerAuthorized returns(bool isValid) {
-        
-        bytes32 key = keccak256(abi.encodePacked(airline, flightCode, timestamp));
+    ) external view requireCallerAuthorized returns (bool isValid) {
+        bytes32 key = keccak256(
+            abi.encodePacked(airline, flightCode, timestamp)
+        );
         isValid = flights[key].isRegistered;
+    }
+
+    function processFlightStatus(
+        address airline,
+        string memory flight,
+        uint256 timestamp,
+        uint8 statusCode
+    ) external requireCallerAuthorized {
+        if (
+            (statusCode == STATUS_CODE_LATE_AIRLINE) ||
+            (statusCode == STATUS_CODE_LATE_TECHNICAL)
+        ) {
+            creditInsurees(flight, airline, timestamp);
+        }
+    }
+
+    function isOnPassengerOnFlight(
+        address airline,
+        string memory flight,
+        uint256 timestamp,
+        address passenger
+    ) external view returns (bool) {
+        bytes32 key = keccak256(abi.encodePacked(airline, flight, timestamp));
+        require(flights[key].isRegistered, "Flight is already registered.");
+
+        bool checker;
+        address[] storage passengerData = flights[key].passengersList;
+
+        for (uint256 i = 0; i < passengerData.length; i++) {
+            if (passengerData[i] == passenger) {
+                checker = true; //or whatever you want to do if it matches
+            }
+        }
+
+        return checker;
+    }
+
+    function getPassengerInsuranceCredit(address wallet)
+        external
+        view
+        returns (uint256)
+    {
+        return passengers[wallet].insuranceCredit;
     }
 
     /**

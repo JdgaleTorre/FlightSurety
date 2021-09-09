@@ -7,12 +7,11 @@ contract("Flight Surety Tests", async (accounts) => {
 
   let FLIGHT = {
     airline: accounts[2],
-    flight: "ND1309", 
+    flight: "ND1309",
     from: "SPS",
-    to: "TGU", 
-    timestamp: TIMESTAMP
-  }
-
+    to: "TGU",
+    timestamp: TIMESTAMP,
+  };
 
   before("setup contract", async () => {
     config = await Test.Config(accounts);
@@ -206,7 +205,6 @@ contract("Flight Surety Tests", async (accounts) => {
   });
 
   it("(airline) Airline 2 can add a Flight", async () => {
-    
     try {
       await config.flightSuretyApp.registerFlight(
         FLIGHT.flight,
@@ -215,9 +213,7 @@ contract("Flight Surety Tests", async (accounts) => {
         FLIGHT.timestamp,
         { from: FLIGHT.airline }
       );
-    } catch (e) {
-      console.log(e);
-    }
+    } catch (e) {}
     let isValidFlight = await config.flightSuretyData.isValidFlight.call(
       FLIGHT.flight,
       FLIGHT.airline,
@@ -227,5 +223,124 @@ contract("Flight Surety Tests", async (accounts) => {
 
     // ASSERT
     assert.equal(isValidFlight, true, "Flight isn't valid");
+  });
+
+  it("(passenger) can buy flight inssurance for at most 1 ether", async () => {
+    // ARRANGE
+    let passenger6 = accounts[6];
+    let InsuredPrice = web3.utils.toWei("1", "ether");
+
+    try {
+      await config.flightSuretyApp.buy(
+        FLIGHT.flight,
+        FLIGHT.airline,
+        FLIGHT.timestamp,
+        {
+          from: passenger6,
+          value: InsuredPrice,
+        }
+      );
+    } catch (e) {}
+
+    let result = await config.flightSuretyData.isOnPassengerOnFlight.call(
+      FLIGHT.airline,
+      FLIGHT.flight,
+      FLIGHT.timestamp,
+      passenger6
+    );
+
+    // ASSERT
+    assert.equal(result, true, "Status is not true");
+  });
+
+  it("(passenger) Insured passenger can be credited if flight is delayed", async () => {
+    // ARRANGE
+    let passenger = accounts[6];
+    let credit_status = true;
+    let balance = 1.5;
+    let credit_before = 0;
+    let credit_after = 1.5;
+    let STATUS_CODE_LATE_AIRLINE = 20;
+
+    try {
+      // Check credit before passenger was credited
+      credit_before =
+        await config.flightSuretyData.getPassengerInsuranceCredit.call(
+          passenger
+        );
+      credit_before = web3.utils.fromWei(credit_before, "ether");
+      // console.log(credit_before);
+
+      // Credit the passenger
+      await config.flightSuretyApp.processFlightStatus(
+        FLIGHT.airline,
+        FLIGHT.flight,
+        FLIGHT.timestamp,
+        STATUS_CODE_LATE_AIRLINE
+      );
+
+      // Get credit after passenger has been credited
+      credit_after =
+        await config.flightSuretyData.getPassengerInsuranceCredit.call(
+          passenger
+        );
+      credit_after = web3.utils.fromWei(credit_after, "ether");
+    } catch (e) {
+      console.log(e);
+      credit_status = false;
+    }
+
+    // ASSERT
+    assert.equal(balance, credit_after, "Credited balance  not as expected");
+    assert.equal(credit_status, true, "Passenger was not credited");
+  });
+
+  it("(passenger) Credited passenger can withdraw ether(transfer from airline to passenger)", async () => {
+    // ARRANGE
+    let passenger = accounts[6];
+    let withdraw = true;
+    let balance_before = 0;
+    let balance_after = 0;
+    let eth_balance_before = 0;
+    let eth_balance_after = 0;
+    let credit = 1.5;
+
+    try {
+      balance_before =
+        await config.flightSuretyData.getPassengerInsuranceCredit.call(
+          passenger
+        );
+      balance_before = web3.utils.fromWei(balance_before, "ether");
+
+      eth_balance_before = await web3.eth.getBalance(passenger);
+      eth_balance_before = web3.utils.fromWei(eth_balance_before, "ether");
+      console.log("ETH balance before: ", eth_balance_before);
+
+      await config.flightSuretyApp.withdraw({ from: passenger });
+
+      // Check if credit has been redrawn
+      balance_after =
+      await config.flightSuretyData.getPassengerInsuranceCredit.call(
+        passenger
+      );
+      balance_after = web3.utils.fromWei(balance_after, "ether");
+
+      eth_balance_after = await web3.eth.getBalance(passenger);
+      eth_balance_after = web3.utils.fromWei(eth_balance_after, "ether");
+      console.log("ETH balance after: ", eth_balance_after);
+
+      console.log("The difference is ", eth_balance_after - eth_balance_before);
+    } catch (e) {
+      withdraw = false;
+    }
+
+    // ASSERT
+    assert.equal(withdraw, true, "Passenger could not withdraw");
+    assert.equal(balance_before, credit, "Redrawn credit doesn't match");
+    assert.equal(balance_after, 0, "Credit was't redrawn");
+    assert.ok(
+      eth_balance_after - eth_balance_before > 0,
+      "Credited was not transfered to wallet"
+    );
   });
 });

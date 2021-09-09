@@ -32,7 +32,7 @@ contract('Oracles', async (accounts) => {
         let result = await config.flightSuretyApp.getMyIndexes.call({from: accounts[a]});
         console.log(`${a}. Oracle Registered: ${result[0]}, ${result[1]}, ${result[2]}`);
       } catch (e) {
-        console.log(e);
+        // console.log(e);
       }
     }
   });
