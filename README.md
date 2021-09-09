@@ -39,6 +39,18 @@ To build dapp for prod:
 
 Deploy the contents of the ./dapp folder
 
+## How to Tests
+Run the following command
+`truffle develop`
+
+then
+
+`test`
+
+You will see the following output:
+
+![](tests.png)
+
 
 ## Resources
 
